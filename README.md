@@ -45,7 +45,7 @@ Most RAG systems follow a simple pipeline: split text → embed → retrieve →
 
 | Aspect | Traditional RAG | NexusRAG |
 |---|---|---|
-| **Document Parsing** | Plain text extraction, structure lost | Docling: preserves headings, page boundaries, formulas, layout |
+| **Document Parsing** | Plain text extraction, structure lost | Docling or [Marker](https://github.com/datalab-to/marker): preserves headings, page boundaries, formulas, layout — switchable via config |
 | **Images & Tables** | Ignored entirely | Extracted, captioned by vision LLM, embedded as searchable vectors |
 | **Chunking** | Fixed-size splits, breaks mid-sentence | Hybrid semantic + structural chunking (respects headings, tables) |
 | **Embeddings** | Single model for everything | Dual-model: BAAI/bge-m3 (1024d, search) + KG embedding (Gemini 3072d / Ollama / sentence-transformers) |
@@ -60,15 +60,31 @@ Most RAG systems follow a simple pipeline: split text → embed → retrieve →
 ## Features
 
 <details>
-<summary><b>Deep Document Parsing (Docling)</b></summary>
+<summary><b>Deep Document Parsing (Docling / Marker)</b></summary>
 
-NexusRAG uses [Docling](https://github.com/docling-project/docling) for structural document understanding — not just text extraction:
+NexusRAG supports two document parsers, switchable via `NEXUSRAG_DOCUMENT_PARSER` env config:
 
-- **Structural preservation** — Heading hierarchy (`H1 > H2 > H3`), page boundaries, paragraph grouping
-- **Formula enrichment** — LaTeX math notation preserved during conversion
-- **Multi-format** — PDF, DOCX, PPTX, HTML, TXT with consistent output
-- **Hybrid chunking** — `HybridChunker(max_tokens=512, merge_peers=True)` respects semantic AND structural boundaries — never splits mid-heading or mid-table
+| Feature | [Docling](https://github.com/docling-project/docling) (default) | [Marker](https://github.com/datalab-to/marker) |
+|---|---|---|
+| **Math/Formula** | Basic (known LaTeX issues) | Superior LaTeX via Surya |
+| **GPU footprint** | ~18-20GB VRAM (formula enrichment) | ~2-4GB VRAM |
+| **Formats** | PDF, DOCX, PPTX, HTML | PDF, DOCX, PPTX, XLSX, HTML, EPUB |
+| **Chunking** | HybridChunker (semantic + structural) | Heading-aware + page-based |
+| **Image extraction** | Via Docling pipeline | Via Marker pipeline |
+| **Table extraction** | Structured export | Markdown tables |
+
+Both parsers share the same output contract (`ParsedDocument`) — downstream pipeline (dedup, embedding, KG, retrieval) works identically regardless of parser choice.
+
+**Common features across both parsers:**
+- **Structural preservation** — Heading hierarchy, page boundaries, paragraph grouping
+- **Multi-format** — PDF, DOCX, PPTX, TXT with consistent output
 - **Page-aware metadata** — Every chunk carries its page number, heading path, and references to images/tables on the same page
+- **LLM captioning** — Images and tables captioned by vision/text LLM for semantic search
+
+```bash
+# Switch parser in .env
+NEXUSRAG_DOCUMENT_PARSER=marker   # or "docling" (default)
+```
 
 </details>
 
@@ -97,17 +113,17 @@ NexusRAG uses [Docling](https://github.com/docling-project/docling) for structur
 <details>
 <summary><b>Visual Document Intelligence</b></summary>
 
-Images and tables are **embedded into chunk vectors** — not stored separately. When Docling extracts an image on page 5, its LLM-generated caption is appended to the text chunks on that page before embedding. This means searching for "revenue chart" finds chunks that contain the chart description, without needing a separate image search index.
+Images and tables are **embedded into chunk vectors** — not stored separately. When the parser extracts an image on page 5, its LLM-generated caption is appended to the text chunks on that page before embedding. This means searching for "revenue chart" finds chunks that contain the chart description, without needing a separate image search index.
 
 **Image Pipeline**
-1. Docling extracts images from PDF/DOCX/PPTX (up to 50 per document, 2x resolution)
+1. Parser (Docling or Marker) extracts images from PDF/DOCX/PPTX (up to 50 per document)
 2. Vision LLM (Gemini Vision or Ollama multimodal) generates captions: specific numbers, labels, trends
 3. Captions appended to page chunks: `[Image on page 5]: Graph showing 12% revenue growth YoY`
 4. Chunk is embedded → **image becomes vector-searchable** through its description
 5. During retrieval, images on matched pages are surfaced as `[IMG-p4f2]` references
 
 **Table Pipeline**
-1. Docling exports tables as structured Markdown (preserving rows, columns, dimensions)
+1. Parser exports tables as structured Markdown (preserving rows, columns, dimensions)
 2. Text LLM summarizes each table: purpose, key columns, notable values (max 500 chars)
 3. Summaries appended to page chunks: `[Table on page 5 (3x4)]: Annual sales by region`
 4. Table summaries injected back into document Markdown as blockquotes for the document viewer
@@ -361,7 +377,7 @@ Goal: compare cost-efficiency (local 4B/9B) vs cloud quality across faithfulness
 | **SQLAlchemy 2.0** | Async ORM with PostgreSQL (asyncpg) |
 | **ChromaDB** | Vector store — cosine similarity, per-workspace collections |
 | **LightRAG** | Knowledge graph — entity extraction, multi-hop queries |
-| **Docling** | Document parsing — PDF, DOCX, PPTX, HTML with structural extraction |
+| **Docling / Marker** | Document parsing — PDF, DOCX, PPTX, HTML with structural extraction (switchable via config) |
 | **sentence-transformers** | BAAI/bge-m3 embeddings + BAAI/bge-reranker-v2-m3 reranking |
 | **google-genai** | Gemini API — chat, vision, function calling, extended thinking |
 | **ollama** | Local LLM — tool calling via prompt tags, multimodal support |
@@ -491,6 +507,8 @@ cp .env.example .env
 | `NEXUSRAG_VECTOR_PREFETCH` | `20` | Candidates before reranking |
 | `NEXUSRAG_RERANKER_TOP_K` | `8` | Final results after reranking |
 | `NEXUSRAG_ENABLE_KG` | `true` | Enable knowledge graph extraction |
+| `NEXUSRAG_DOCUMENT_PARSER` | `docling` | Document parser: `docling` (default) or `marker` (lighter, better math) |
+| `NEXUSRAG_MARKER_USE_LLM` | `false` | Enable LLM-enhanced mode for Marker (better tables, equations) |
 | `NEXUSRAG_ENABLE_IMAGE_EXTRACTION` | `true` | Extract images from documents |
 | `NEXUSRAG_ENABLE_IMAGE_CAPTIONING` | `true` | LLM-caption images for search |
 | `NEXUSRAG_KG_LANGUAGE` | `Vietnamese` | KG extraction language |
