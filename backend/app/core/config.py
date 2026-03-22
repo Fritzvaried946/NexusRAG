@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     NEXUSRAG_MAX_IMAGES_PER_DOC: int = 50
     NEXUSRAG_ENABLE_FORMULA_ENRICHMENT: bool = True
 
+    # Document Parser provider: "docling" (default) or "marker" (lighter, better math)
+    NEXUSRAG_DOCUMENT_PARSER: str = "docling"
+    NEXUSRAG_MARKER_USE_LLM: bool = False
+
     # Processing timeout (minutes) — stale documents auto-recover to FAILED
     NEXUSRAG_PROCESSING_TIMEOUT_MINUTES: int = 10
 

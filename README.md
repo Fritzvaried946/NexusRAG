@@ -502,7 +502,7 @@ cp .env.example .env
 ## Roadmap
 
 - [ ] **Multimodal Retrieval** — Integrate Gemini Embedding 2 (multimodal) for audio and video input retrieval — ask questions about podcasts, lectures, or video content directly
-- [ ] **Marker PDF Parser** — Add [Marker](https://github.com/datalab-to/marker) as an alternative document parser with superior math/formula extraction (LaTeX via Surya), lighter GPU footprint (~2-4GB VRAM vs Docling's ~18-20GB), and switchable via `NEXUSRAG_DOCUMENT_PARSER=marker` env config
+- [x] **Marker PDF Parser** — Add [Marker](https://github.com/datalab-to/marker) as an alternative document parser with superior math/formula extraction (LaTeX via Surya), lighter GPU footprint (~2-4GB VRAM vs Docling's ~18-20GB), and switchable via `NEXUSRAG_DOCUMENT_PARSER=marker` env config
 
 ---
 
